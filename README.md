@@ -1,2 +1,1 @@
-# Colabfold
-Colabfold setup and scripts
+# Colabfold local setup and scripts
