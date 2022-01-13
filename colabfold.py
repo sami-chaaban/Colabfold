@@ -15,7 +15,6 @@ from pathlib import Path
 #######################################################
 
 import getopt
-from shutil import rmtree
 
 opts, args = getopt.getopt(sys.argv[1:],"s:j:m:o:r:a:t",["sequence=", "jobname=", "num_models=", "output=", "num_recycles=", "use_amber=", "use_templates="])
 
@@ -121,9 +120,3 @@ run(
     zip_results=zip_results,
 )#Changed by Sami
 
-#######################################################
-
-#Added by Sami. No longer needed since params not downloaded at each run anymore
-#paramspath = Path(result_dir).joinpath("params")
-#if os.path.exists(paramspath):
-#    rmtree(paramspath)
