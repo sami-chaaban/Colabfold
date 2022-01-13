@@ -79,3 +79,5 @@ conda activate colabfold
 ..Run colabfold with:
 
 python colabfold.py --sequence="MYSEQUENCE:OTHERSEQUENCE" --jobname="complex3"
+
+..other options include --num_models=#, --output=dir, --num_recycles=#, --use_amber=True/False, and --use_templates=True/False
