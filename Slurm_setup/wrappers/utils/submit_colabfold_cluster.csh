@@ -20,8 +20,6 @@ set ENV = $TOOLS/envs/colabfold
 set PYTHONPATH = $ENV/bin/python3.8
 set PYTHONSCRIPT = /cephfs/public/ColabFold/lmb/utils/run_colabfold.py
 
-set COLABFOLDVERSION = "Colabfold 1.2.0 (44c12f452403254e7b2fcaac02e434d32457ab0b)"
-
 ###################
 #Dependencies
 
@@ -73,7 +71,6 @@ set SEQUENCE = `cat $1`
 ###################
 #User info
 
-echo $COLABFOLDVERSION
 echo
 echo "------------------------------------------"
 echo "Job parameters:"
