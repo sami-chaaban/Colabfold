@@ -11,7 +11,7 @@ if [ $# -eq 0 ]; then
     echo
     echo "·································"
     echo
-    echo "LMB ALPHAFOLD CLUSTER SUBMISSION"
+    echo "ALPHAFOLD CLUSTER SUBMISSION"
     echo $VERSION
     echo
     echo $COLABFOLD
@@ -145,7 +145,7 @@ fi
 
 echo
 echo "·································"
-echo "LMB ALPHAFOLD CLUSTER SUBMISSION"
+echo "ALPHAFOLD CLUSTER SUBMISSION"
 echo "version "$VERSION
 echo
 echo $COLABFOLD
