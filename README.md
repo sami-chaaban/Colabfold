@@ -1,1 +1,3 @@
-# Colabfold local setup and scripts
+# Colabfold local and Slurm setup
+
+Based on https://github.com/sokrypton/ColabFold
