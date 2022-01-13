@@ -1,0 +1,166 @@
+#!/bin/bash
+
+CLUSTERSCRIPT="/cephfs/public/ColabFold/lmb/utils/submit_colabfold_cluster.csh"
+
+VERSION="2022-01-04"
+COLABFOLD="Colabfold 1.2.0 (44c12f452403254e7b2fcaac02e434d32457ab0b)"
+
+#######################################
+
+if [ $# -eq 0 ]; then
+    echo
+    echo "·································"
+    echo
+    echo "LMB ALPHAFOLD CLUSTER SUBMISSION"
+    echo $VERSION
+    echo
+    echo $COLABFOLD
+    echo
+    echo "Usage:"
+    echo "colabfold target(s).fasta [--option=value]"
+    echo
+    echo "Colabfold arguments:"
+    echo "--jobname : Name to use as a prefix for the output files (default filename)"
+    echo "--output : Output directory (default current directory)"
+    echo "--num_models : Number of models to run (default 5, maximum 5)"
+    echo "--num_recycles : Number of cycles (default 3)"
+    echo "--use_amber : Use amber relaxation (default False)"
+    echo "--use_templates : Use templates up to the current date (default False)"
+    echo
+    echo "Cluster arguments:"
+    echo "--cpus : Number of cpus to use (default 8)"
+    echo "--gpus : Number of GPUs to use (default 1, maximum 4)"
+    echo "--memory : Memory to allocate (default 45G)"
+    echo
+    echo "Examples:"
+    echo "colabfold sequences.fasta"
+    echo "colabfold complex1.fasta --jobname=complex1_amber --use_amber=True"
+    echo
+    echo "·································"
+    echo
+    exit 1
+fi
+
+###############################
+#Checks
+
+if [ ! -f "$1" ]; then
+    echo
+    echo "$1 does not exist."
+    echo
+    exit 1
+fi
+
+###############################
+#Default variables
+
+f=$1 #filename
+t=${f##*/} #temporary variable
+JOBNAME=${t%.*} #filename without path and extension
+NUMMODELS=5
+NUMRECYCLES=3
+NUMCPUS=8
+NUMGPUS=1
+MEMORY=45G
+OUTPUT=.
+USEAMBER=False
+USETEMPLATES=False
+
+###############################
+#Parse input and override defaults
+
+for i in "$@"; do
+  case $i in
+    -j=*|--jobname=*)
+      JOBNAME="${i#*=}"
+      shift
+      ;;
+    -m=*|--num_models=*)
+      NUMMODELS="${i#*=}"
+      shift
+      ;;
+    -c=*|--cpus=*)
+      NUMCPUS="${i#*=}"
+      shift
+      ;;
+    -g=*|--gpus=*)
+      NUMGPUS="${i#*=}"
+      shift
+      ;;
+    -m=*|--memory=*)
+      MEMORY="${i#*=}"
+      shift
+      ;;
+    -o=*|--output=*)
+      OUTPUT="${i#*=}"
+      shift
+      ;;
+    -r=*|--num_recycles=*)
+      NUMRECYCLES="${i#*=}"
+      shift
+      ;;
+    -a=*|--use_amber=*)
+      USEAMBER="${i#*=}"
+      shift
+      ;;
+    -t=*|--use_templates=*)
+      USETEMPLATES="${i#*=}"
+      shift
+      ;;
+    *)
+      ;;
+  esac
+done
+
+mkdir -p $OUTPUT
+
+###############################
+#Parse sequence
+
+STITCHEDFILE=${OUTPUT}/stitchedsequence.tmp
+
+cp $f "${OUTPUT}/temp1.tmp"
+echo "" >> "${OUTPUT}/temp1.tmp"
+while read line;do if [ "${line:0:1}" == ">" ]; then echo -e "\n"$line; else echo $line | tr -d '\n\r' ; fi; done < "${OUTPUT}/temp1.tmp" > "${OUTPUT}/temp2.tmp"
+sed -i '/./,$!d' "${OUTPUT}/temp2.tmp"
+grep -v '>' "${OUTPUT}/temp2.tmp" | tr '\n' ':' | sed 's/:$/\n/' | sed 's/ //g' > $STITCHEDFILE
+rm -f "${OUTPUT}/temp1.tmp" "${OUTPUT}/temp2.tmp"
+
+###############################
+#Checks
+
+if test -f "$OUTPUT/Colabfold.out"; then
+    echo
+    echo "·································"
+    echo "Warning: this directory seems to already have Colabfold output files!"
+    echo
+    echo "You can use the --output=foldername to create a fresh directory for this run."
+    echo
+    read -p "Press enter to continue anyway or ctrl-c to quit."
+    echo
+fi
+
+###############################
+#Submit job
+
+echo
+echo "·································"
+echo "LMB ALPHAFOLD CLUSTER SUBMISSION"
+echo "version "$VERSION
+echo
+echo $COLABFOLD
+echo
+echo "Folding $JOBNAME."
+echo
+echo "Colabfold.out and log.txt will update as the job progresses."
+echo
+echo "Verify that the job is running with \"squeue -u yourusername\"."
+echo
+echo "Cancel the job with \"scancel JOBID\", where JOBID is the batch job number below."
+echo
+
+sbatch --gres=gpu:${NUMGPUS} --cpus-per-task=${NUMCPUS} --mem=${MEMORY} --error="${OUTPUT}/Colabfold.out" --output="${OUTPUT}/Colabfold.out" $CLUSTERSCRIPT $STITCHEDFILE $JOBNAME $NUMMODELS $NUMGPUS $OUTPUT $NUMRECYCLES $USEAMBER $USETEMPLATES
+
+echo
+
+exit 0
