@@ -1,0 +1,317 @@
+#!/bin/bash
+
+CLUSTERSCRIPT="/cephfs/public/ColabFold2/lmb/utils/submit_colabfold_cluster.csh"
+
+VERSION="2022-05-03"
+COLABFOLD="Colabfold 1.3.0"
+
+#######################################
+
+if [ $# -eq 0 ]; then
+    echo
+    echo "·································"
+    echo
+    echo "LMB ALPHAFOLD CLUSTER SUBMISSION"
+    echo $VERSION
+    echo
+    echo $COLABFOLD
+    echo
+    echo "Usage:"
+    echo "colabfold2 target(s).fasta [--option=value]"
+    echo
+    echo "Colabfold options:"
+    echo "--jobname : Name to use as a prefix for the output files (default filename)"
+    echo "--output : Output directory (default current directory)"
+    echo "--num_models : Number of models to run (default 5, maximum 5)"
+    echo "--num_recycles : Number of recycles (default 3)"
+    echo "--use_amber : Use amber relaxation (default False)"
+    echo "--use_templates : Use templates up to the current date (default False)"
+    echo "--custom_template : Path to a directory containing a template in mmCIF format."
+    echo "                    Name must follow the PDB naming (four letters) and must contain"
+    echo "                    _entity_poly_seq and _pdbx_audit_revision_history.revision_date"
+    echo "--custom_msa : Path to multiple sequence alignment to use in prediction in a3m format"
+    echo "--pair_mode : \"unpaired-paired\" = pair sequences from same species + unpaired MSA,"
+    echo "             \"unpaired\" = seperate MSA for each chain,"
+    echo "              \"paired\" = only use paired sequences. (default \"unpaired+paired\")"
+    echo "--multimer_version : The version of multimer to use if predicting complexes (1 or 2) (default 2)"
+    echo
+    echo "Cluster options:"
+    echo "--cpus : Number of CPUs to use (default 8)"
+    echo "--gpus : Number of GPUs to use (default 1, maximum 4)"
+    echo "--partition : Which partition to submit to (gpu or ml, default gpu)."
+    echo "--memory : Memory to allocate (default 45G)"
+    echo
+    echo "Examples:"
+    echo "colabfold2 sequences.fasta"
+    echo "colabfold2 complex1.fasta --output=complex1_rec10 --num_recycles=10"
+    echo
+    echo "·································"
+    echo
+    exit 1
+fi
+
+###############################
+#Checks
+
+# Are the arguments right
+
+for var in "${@:2}"
+do
+    if [[ "$var" != *"="* ]]; then
+        echo
+        echo "Error: all options must have an equal sign when setting their value (check your $var option)"
+        echo
+        exit 1
+    fi
+done
+
+list="--jobname --output --num_models --num_recycles --use_amber --use_templates --custom_template --custom_msa --pair_mode --multimer_version --cpus --gpus --memory --partition"
+
+for var in "${@:2}"
+do
+    option="$(cut -d'=' -f1 <<<"$var")"
+    [[ $list =~ (^|[[:space:]])$option($|[[:space:]]) ]] || { echo ; echo "Error: ${option} is not an option." ;  echo ; exit 1; }
+done
+
+for var in "${@:2}"
+do
+    ##
+    [[ $list =~ (^|[[:space:]])$option($|[[:space:]]) ]] || { echo ; echo "Error: ${option} is not an option." ;  echo ; exit 1; }
+
+    ##
+    option="$(cut -d'=' -f1 <<<"$var")"
+    argument="$(cut -d'=' -f2 <<<"$var")"
+
+    if [ $option == "--num_models" ]
+    then
+        argumentlist="1 2 3 4 5"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--use_amber" ]
+    then
+        argumentlist="True true False false"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--use_templates" ]
+    then
+        argumentlist="True true False false"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--custom_template" ]
+    then
+        if [ ! -d "$argument" ]; then
+            echo
+            echo "Error: $argument directory does not exist."
+            echo
+            exit 1
+        fi
+    fi
+
+    if [ $option == "--custom_msa" ]
+    then
+        if [ ! -f "$argument" ]; then
+            echo
+            echo "Error: $argument does not exist."
+            echo
+            exit 1
+        fi
+    fi
+
+    if [ $option == "--pair_mode" ]
+    then
+        argumentlist="unpaired-paired unpaired paired"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--gpus" ]
+    then
+        argumentlist="1 2 3 4"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--memory" ]
+    then
+        if [[ "$argument" != *"G"* ]]; then
+            [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: the --memory option needs to have the letter G after the number." ;  echo ; exit 1; }
+        fi
+    fi
+
+    if [ $option == "--partition" ]
+    then
+        argumentlist="gpu ml"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--multimer_version" ]
+    then
+        argumentlist="1 2"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    ##
+
+done
+
+#Does the file exist
+if [ ! -f "$1" ]; then
+    echo
+    echo "Error: $1 does not exist."
+    echo
+    exit 1
+fi
+
+###############################
+#Default variables set before reading the user's input
+
+f=$1 #filename
+t=${f##*/} #temporary variable
+JOBNAME=${t%.*} #filename without path and extension
+NUMMODELS=5
+NUMRECYCLES=3
+NUMCPUS=8
+NUMGPUS=1
+MEMORY=45G
+OUTPUT=.
+USEAMBER=False
+USETEMPLATES=False
+CUSTOMTEMPLATE=none
+CUSTOMMSA=none
+PAIRMODE=unpaired-paired
+MULTIMERVERSION=auto
+PARTITION=gpu
+
+###############################
+#Parse input and override defaults
+
+for i in "$@"; do
+  case $i in
+    -a=*|--jobname=*)
+      JOBNAME="${i#*=}"
+      shift
+      ;;
+    -b=*|--num_models=*)
+      NUMMODELS="${i#*=}"
+      shift
+      ;;
+    -c=*|--cpus=*)
+      NUMCPUS="${i#*=}"
+      shift
+      ;;
+    -d=*|--gpus=*)
+      NUMGPUS="${i#*=}"
+      shift
+      ;;
+    -e=*|--memory=*)
+      MEMORY="${i#*=}"
+      shift
+      ;;
+    -f=*|--output=*)
+      OUTPUT="${i#*=}"
+      shift
+      ;;
+    -g=*|--num_recycles=*)
+      NUMRECYCLES="${i#*=}"
+      shift
+      ;;
+    -h=*|--use_amber=*)
+      USEAMBER="${i#*=}"
+      shift
+      ;;
+    -i=*|--use_templates=*)
+      USETEMPLATES="${i#*=}"
+      shift
+      ;;
+    -j=*|--custom_template=*)
+      CUSTOMTEMPLATE="${i#*=}"
+      shift
+      ;;
+    -k=*|--custom_msa=*)
+      CUSTOMMSA="${i#*=}"
+      shift
+      ;;
+    -l=*|--pair_mode=*)
+      PAIRMODE="${i#*=}"
+      shift
+      ;;
+    -m=*|--multimer_version=*)
+      MULTIMERVERSION="${i#*=}"
+      shift
+      ;;
+    -n=*|--partition=*)
+      PARTITION="${i#*=}"
+      shift
+      ;;
+    *)
+      ;;
+  esac
+done
+
+mkdir -p $OUTPUT
+
+###############################
+#Parse sequence
+
+STITCHEDFILE=${OUTPUT}/stitchedsequence.tmp
+
+cp $f "${OUTPUT}/temp1.tmp"
+echo "" >> "${OUTPUT}/temp1.tmp"
+while read line;do if [ "${line:0:1}" == ">" ]; then echo -e "\n"$line; else echo $line | tr -d '\n\r' ; fi; done < "${OUTPUT}/temp1.tmp" > "${OUTPUT}/temp2.tmp"
+sed -i '/./,$!d' "${OUTPUT}/temp2.tmp"
+grep -v '>' "${OUTPUT}/temp2.tmp" | tr '\n' ':' | sed 's/:$/\n/' | sed 's/ //g' > $STITCHEDFILE
+rm -f "${OUTPUT}/temp1.tmp" "${OUTPUT}/temp2.tmp"
+
+###############################
+#Check if complex to make sure multimer version wasn't also supplied
+
+ISCOMPLEX=`fgrep -o ":" $STITCHEDFILE | wc -l`
+
+if [ $ISCOMPLEX = "0" ] ; then
+    if [ $MULTIMERVERSION != "auto" ]; then
+        echo
+        echo "Error: you cannot specify multimer_version when you only have one chain."
+        echo
+        exit 1
+    fi
+fi
+
+###############################
+#Checks
+
+if test -f "$OUTPUT/Colabfold.out"; then
+    echo
+    echo "·································"
+    echo "Warning: this directory seems to already have Colabfold output files!"
+    echo
+    echo "You can use the --output=foldername to create a fresh directory for this run."
+    echo
+    read -p "Press enter to continue anyway or ctrl-c to quit."
+    echo
+fi
+
+###############################
+#Submit job
+
+echo
+echo "·································"
+echo "LMB ALPHAFOLD CLUSTER SUBMISSION"
+echo "version "$VERSION
+echo
+echo $COLABFOLD
+echo
+echo "Folding $JOBNAME."
+echo
+echo "Colabfold.out and log.txt will update as the job progresses."
+echo
+echo "Verify that the job is running with \"squeue -u yourusername\"."
+echo
+echo "Cancel this job with \"scancel JOBID\", where JOBID is the batch job number below."
+echo
+
+sbatch --gres=gpu:${NUMGPUS} --cpus-per-task=${NUMCPUS} --mem=${MEMORY} --partition=${PARTITION} --error="${OUTPUT}/Colabfold.out" --output="${OUTPUT}/Colabfold.out" $CLUSTERSCRIPT $STITCHEDFILE $JOBNAME $NUMMODELS $NUMGPUS $OUTPUT $NUMRECYCLES $USEAMBER $USETEMPLATES $CUSTOMTEMPLATE $CUSTOMMSA $PAIRMODE $MULTIMERVERSION $PARTITION
+
+echo
+
+exit 0
