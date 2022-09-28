@@ -1,11 +1,11 @@
 #!/bin/tcsh
 #
-#SBATCH --job-name=Colabfold
+#SBATCH --job-name=Colabfold2
 #SBATCH --open-mode=append
 ##SBATCH --time=2-00:00:00
 #SBATCH --mail-type=FAIL
-#SBATCH --partition=gpu
 #SBATCH --ntasks=1
+##SBATCH --partition=gpu
 ##SBATCH --cpus-per-task=XXCPUSXX #set by user
 ##SBATCH --mem=XXMEMXX #set by user
 ##SBATCH --gres=gpu:XXGPUSXX #set by user
@@ -15,10 +15,11 @@
 ##################
 #CONSTANTS
 
-set TOOLS = /cephfs/public/ColabFold/colabfoldconda
+set TOOLS = /cephfs/public/ColabFold2/colabfoldconda
 set ENV = $TOOLS/envs/colabfold
 set PYTHONPATH = $ENV/bin/python3.8
-set PYTHONSCRIPT = /cephfs/public/ColabFold/lmb/utils/run_colabfold.py
+set PYTHONSCRIPT = /cephfs/public/ColabFold2/lmb/utils/run_colabfold.py
+set COLABFOLDVERSION = "Colabfold 1.3.0"
 
 ###################
 #Dependencies
@@ -71,6 +72,7 @@ set SEQUENCE = `cat $1`
 ###################
 #User info
 
+echo $COLABFOLDVERSION
 echo
 echo "------------------------------------------"
 echo "Job parameters:"
@@ -91,26 +93,37 @@ echo "Use amber: "$7
 echo
 echo "Use templates: "$8
 echo
+echo "Custom template: "$9
+echo
+echo "Custom MSA: "${10}
+echo
+echo "Pair mode: "${11}
+echo
+echo "Multimer version: "${12}
+echo
 echo "------------------------------------------"
 echo "Colabfold log:"
 echo "------------------------------------------"
-echo "(it may take a minute to start)"
 echo
-echo "Also check log.txt."
+echo "This file will update as the prediction proceeds"
+echo "It may take a minute to start"
 echo
-echo "To cancel this job, use: scancel $SLURM_JOB_ID."
+echo "It is useful to run tail -f Colabfold.out to watch the log as it updates"
+echo "You can also check log.txt"
+echo
+echo "If you want to cancel this job, run scancel $SLURM_JOB_ID"
 echo
 
 ###################
 #Submit command
 
-mpiexec --oversubscribe $PYTHONPATH $PYTHONSCRIPT --sequence=$SEQUENCE --jobname=$2 --num_models=$3 --output=$5 --num_recycles=$6 --use_amber=$7 --use_templates=$8
+mpiexec --oversubscribe $PYTHONPATH $PYTHONSCRIPT --sequence=$SEQUENCE --jobname=$2 --num_models=$3 --output=$5 --num_recycles=$6 --use_amber=$7 --use_templates=$8 --custom_template=$9 --custom_msa=${10} --pair_mode=${11} --multimer_version=${12}
 
-echo
-echo "Memory usage:"
-echo
+#echo
+#echo "Final memory usage:"
+#echo
 
-sstat -j $SLURM_JOB_ID.batch --format="JobID,MaxRSS%20"
+#sstat -j $SLURM_JOB_ID.batch --format="JobID,MaxRSS%20"
 
 echo
 
