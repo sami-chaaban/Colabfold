@@ -22,8 +22,8 @@ pip install "colabfold[alphafold] @ git+https://github.com/sokrypton/ColabFold"
 
 conda install -c conda-forge cudnn==8.2.1.32 cudatoolkit==11.1.1 openmm==7.5.1 pdbfixer
 
-..get the file below from https://storage.googleapis.com/jax-releases/jax_releases.html
-pip install jaxlib-0.1.75+cuda11.cudnn82-cp38-none-manylinux2010_x86_64.whl
+..get the file below from https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install jaxlib-0.3.15+cuda11.cudnn82-cp38-none-manylinux2014_x86_64.whl
 
 ############
 #Alphafold models
@@ -61,7 +61,7 @@ wget https://git.scicore.unibas.ch/schwede/openstructure/-/raw/7102c63615b64735c
 
 ..edit colabfold/batch.py. The stereo_chemical_props_path should point to "/full/path/to/stereo_chemical_props.txt"
 ..edit alphafold/common/residue_constants.py. The stereo_chemical_props_path should point to as above
-..edit both instances of "CPU" in alphafold/relax/amber_minimize.py to "CUDA" to run amber_relax on GPUs (faster)
+..edit "CPU" in alphafold/relax/amber_minimize.py to "CUDA"
 
 ############
 #Wrapper scripts
