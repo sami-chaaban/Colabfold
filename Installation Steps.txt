@@ -1,6 +1,9 @@
 
 These steps must be done in the order that they appear here.
 
+Current issues:
+-There is a bug that prevents single chains from running with this install that I'm investigating. Multimer works fine.
+
 ############
 #Basic setup
 
@@ -57,13 +60,14 @@ The workflow is:
 2) Edit the variables in bin/colabfold5
 ---CLUSTERSCRIPT: should point to the utils/submission script#
 ---PARTITION: the name of the partition for the GPU cluster
+---Note the current workaround for single chains (line 315-317), which points to a previous ColabFold2 installation that worked. Currently investigating.
 ---etc.
 3) Edit the variables in the submission script utils/submit_colabfold_cluster.csh
 This script is a bit janky in that it takes in the variables from the bash script in sequential order, which can easily break if you edit out one variable from the previous script.
 ---TOOLS: should point to the colabfoldconda directory in the parent directory 
 ---PYTHONSCRIPT to point to run_colabfold.py 
 ---MODULEPATH and module load for CUDA
----OpenMPI
+---OpenMPI to properly load openmpi
 ---$SLURMJOBID to the appropriate variable name for the job ID
 4) Edit the variables in utils/run_colabfold.py
 ---paramsdir should point to "/path/to/ColabFold5/colabfoldconda/envs/colabfold/lib/python3.8/site-packages/alphafold/data"
