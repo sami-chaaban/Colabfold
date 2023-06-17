@@ -1,0 +1,72 @@
+
+These steps must be done in the order that they appear here.
+
+############
+#Basic setup
+
+1) Start a fresh terminal
+2) Make a directory to store the environment and wrappers (e.g. ColabFold5)
+3) Get Miniconda, which will handle the colabfold installation.
+wget -q -P . https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh -b -p colabfoldconda
+rm -f Miniconda3-latest-Linux-x86_64.sh
+4) Make a colabfold environment in miniconda
+source colabfoldconda/etc/profile.d/conda.csh
+conda create -n colabfold python=3.8 -y
+conda activate colabfold
+conda update -n base conda -y
+5) Install colabfold and some dependencies
+pip install "colabfold[alphafold] @ git+https://github.com/sokrypton/ColabFold"
+conda install -c conda-forge cudnn==8.2.1.32 cudatoolkit==11.1.1 openmm==7.5.1 pdbfixer -y
+6) Download and install the appropriate jax dependency from https://storage.googleapis.com/jax-releases/jax_cuda_releases.html (e.g. cuda11/jaxlib-0.3.25+cuda11.cudnn82-cp38-cp38-manylinux2014_x86_64.whl)
+pip install jaxlib-0.3.25+cuda11.cudnn82-cp38-cp38-manylinux2014_x86_64.whl
+7) Download and install hhsearch
+git clone https://github.com/soedinglab/hh-suite.git
+mkdir -p hh-suite/build && cd hh-suite/build
+cmake -DCMAKE_INSTALL_PREFIX=. ..
+make -j 4 && make install
+
+############
+#Alphafold models
+
+1) Download the AlphaFold models from here: https://storage.googleapis.com/alphafold/alphafold_params_2022-12-06.tar
+2) Extract them into the right directory
+mkdir colabfoldconda/envs/colabfold/lib/python3.8/site-packages/alphafold/data/params
+tar --extract --verbose --file="alphafold_params_2022-12-06.tar" --preserve-permissions --directory="colabfoldconda/envs/colabfold/lib/python3.8/site-packages/alphafold/data/params"
+
+############
+#Colabfold patching
+
+1) Change the binary_path variable for hhsearch_pdb70_runner in colabfoldconda/envs/colabfold/lib/python3.8/site-packages/colabfold/batch.py to the right path from the installation above (e.g. "/somewhere/to/this/pkgs/hhsuite-3.3.0-py38pl5262hc37a69a_2/bin/hhsearch")
+2) Add these lines of code to the very top of colabfoldconda/envs/colabfold/lib/python3.8/site-packages/colabfold/plot.py
+import matplotlib
+matplotlib.use('Agg')
+3) Download stereo_chemical_props.txt to the parent directory (e.g. ColabFold5)
+wget https://git.scicore.unibas.ch/schwede/openstructure/-/raw/7102c63615b64735c4941278d92b554ec94415f8/modules/mol/alg/src/stereo_chemical_props.txt --no-check-certificate
+4)Change the stereo_chemical_props_path variable in colabfoldconda/envs/colabfold/lib/python3.8/site-packages/colabfold/alphafold/common/residue_constants.py to point to "/path/to/ColabFold5/stereo_chemical_props.txt"
+
+############
+#Cluster submission
+
+The workflow is:
+-bin/colabfold5 takes in user input and passes it to utils/submit_colabfold_cluster.csh
+-utils/submit_colabfold_cluster.csh submits utils/run_colabfold.py to the cluster
+-utils/run_colabfold.py runs the job
+
+1) Copy the wrappers directory into the parent directory
+2) Edit the variables in bin/colabfold5
+---CLUSTERSCRIPT: should point to the utils/submission script#
+---PARTITION: the name of the partition for the GPU cluster
+---etc.
+3) Edit the variables in the submission script utils/submit_colabfold_cluster.csh
+This script is a bit janky in that it takes in the variables from the bash script in sequential order, which can easily break if you edit out one variable from the previous script.
+---TOOLS: should point to the colabfoldconda directory in the parent directory 
+---PYTHONSCRIPT to point to run_colabfold.py 
+---MODULEPATH and module load for CUDA
+---OpenMPI
+---$SLURMJOBID to the appropriate variable name for the job ID
+4) Edit the variables in utils/run_colabfold.py
+---paramsdir should point to "/path/to/ColabFold5/colabfoldconda/envs/colabfold/lib/python3.8/site-packages/alphafold/data"
+
+>>Users just need to have the bin directory in their path and can just execute "colabfold5"<<
+

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-CLUSTERSCRIPT="/cephfs/public/ColabFold2/lmb/utils/submit_colabfold_cluster.csh"
+CLUSTERSCRIPT="/cephfs2/public/ColabFold5/lmb/utils/submit_colabfold_cluster.csh"
 
-VERSION="2022-05-03"
-COLABFOLD="Colabfold 1.3.0"
+VERSION="2023-03-22"
+COLABFOLD="ColabFold 1.5.2"
 
 #######################################
 
@@ -17,33 +17,39 @@ if [ $# -eq 0 ]; then
     echo $COLABFOLD
     echo
     echo "Usage:"
-    echo "colabfold2 target(s).fasta [--option=value]"
+    echo "colabfold5 target.fasta [--option=value]"
     echo
-    echo "Colabfold options:"
+    echo "ColabFold Basic Options:"
     echo "--jobname : Name to use as a prefix for the output files (default filename)"
     echo "--output : Output directory (default current directory)"
     echo "--num_models : Number of models to run (default 5, maximum 5)"
-    echo "--num_recycles : Number of recycles (default 3)"
-    echo "--use_amber : Use amber relaxation (default False)"
-    echo "--use_templates : Use templates up to the current date (default False)"
+    echo
+    echo "ColabFold Advanced Options"
+    echo "--num_recycles : Number of recycles (0 to 48; default auto (20 recycles for multimer-v3 stopping once within tolerance, 3 recycles for other multimers))"
+    echo "--recycle_stop : Tolerance for stopping recycles (0 to 1; default 0.5 for multimer-v3 and 0 for others)."
+    echo "--max_msa : Cut down the MSA to increase uncertainty (none, 16-32, 32-64, 64-128, 256-512, 512-1024; default none)"
+    echo "--use_dropout : Sample from the uncertainty (True, False; default False)"
+    echo "--num_seeds : Sample from the uncertainty (1 to 16; default 1)"
+    echo "--use_amber : Use amber relaxation (True, False; default False)"
+    echo "--use_templates : Use templates up to the current date (True, False; default False)"
     echo "--custom_template : Path to a directory containing a template in mmCIF format."
     echo "                    Name must follow the PDB naming (four letters) and must contain"
     echo "                    _entity_poly_seq and _pdbx_audit_revision_history.revision_date"
     echo "--custom_msa : Path to multiple sequence alignment to use in prediction in a3m format"
-    echo "--pair_mode : \"unpaired-paired\" = pair sequences from same species + unpaired MSA,"
+    echo "--pair_mode : \"unpaired_paired\" = pair sequences from same species + unpaired MSA,"
     echo "             \"unpaired\" = seperate MSA for each chain,"
-    echo "              \"paired\" = only use paired sequences. (default \"unpaired+paired\")"
-    echo "--multimer_version : The version of multimer to use if predicting complexes (1 or 2) (default 2)"
+    echo "              \"paired\" = only use paired sequences. (default \"unpaired_paired\")"
+    echo "--multimer_version : The version of multimer to use if predicting complexes (1, 2, or 3; default 3)"
     echo
-    echo "Cluster options:"
+    echo "LMB Cluster Options:"
     echo "--cpus : Number of CPUs to use (default 8)"
-    echo "--gpus : Number of GPUs to use (default 1, maximum 4)"
-    echo "--partition : Which partition to submit to (gpu or ml, default gpu)."
+    echo "--gpus : Number of GPUs to use (default 1, maximum 4; this only helps with --partition=ml)"
+    echo "--partition : Which partition to submit to (gpu or ml; default gpu). Only use ml for large predictions that cannot be done on gpu."
     echo "--memory : Memory to allocate (default 45G)"
     echo
     echo "Examples:"
-    echo "colabfold2 sequences.fasta"
-    echo "colabfold2 complex1.fasta --output=complex1_rec10 --num_recycles=10"
+    echo "colabfold5 sequences.fasta"
+    echo "colabfold5 complex1.fasta --output=complex1_dropout --use_dropout=True"
     echo
     echo "·································"
     echo
@@ -65,7 +71,7 @@ do
     fi
 done
 
-list="--jobname --output --num_models --num_recycles --use_amber --use_templates --custom_template --custom_msa --pair_mode --multimer_version --cpus --gpus --memory --partition"
+list="--jobname --output --num_models --num_recycles --recycle_stop --max_msa --use_dropout --num_seeds --use_amber --use_templates --custom_template --custom_msa --pair_mode --multimer_version --cpus --gpus --memory --partition"
 
 for var in "${@:2}"
 do
@@ -85,6 +91,24 @@ do
     if [ $option == "--num_models" ]
     then
         argumentlist="1 2 3 4 5"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--max_msa" ]
+    then
+        argumentlist="none 16-32 32-64 64-128 256-512 512-1024"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--use_dropout" ]
+    then
+        argumentlist="True true False false"
+        [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
+    fi
+
+    if [ $option == "--num_seeds" ]
+    then
+        argumentlist="1 2 4 8 16"
         [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
     fi
 
@@ -122,7 +146,7 @@ do
 
     if [ $option == "--pair_mode" ]
     then
-        argumentlist="unpaired-paired unpaired paired"
+        argumentlist="unpaired_paired unpaired paired"
         [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
     fi
 
@@ -147,7 +171,7 @@ do
 
     if [ $option == "--multimer_version" ]
     then
-        argumentlist="1 2"
+        argumentlist="1 2 3"
         [[ $argumentlist =~ (^|[[:space:]])$argument($|[[:space:]]) ]] || { echo ; echo "Error: ${argument} is not a valid argument for ${option}." ;  echo ; exit 1; }
     fi
 
@@ -170,7 +194,11 @@ f=$1 #filename
 t=${f##*/} #temporary variable
 JOBNAME=${t%.*} #filename without path and extension
 NUMMODELS=5
-NUMRECYCLES=3
+NUMRECYCLES=auto
+RECYCLESTOP=auto
+MAXMSA=none
+USEDROPOUT=False
+NUMSEEDS=1
 NUMCPUS=8
 NUMGPUS=1
 MEMORY=45G
@@ -179,7 +207,7 @@ USEAMBER=False
 USETEMPLATES=False
 CUSTOMTEMPLATE=none
 CUSTOMMSA=none
-PAIRMODE=unpaired-paired
+PAIRMODE=unpaired_paired
 MULTIMERVERSION=auto
 PARTITION=gpu
 
@@ -216,31 +244,47 @@ for i in "$@"; do
       NUMRECYCLES="${i#*=}"
       shift
       ;;
-    -h=*|--use_amber=*)
+    -h=*|--recycle_stop=*)
+      RECYCLESTOP="${i#*=}"
+      shift
+      ;;
+    -i=*|--max_msa=*)
+      MAXMSA="${i#*=}"
+      shift
+      ;;
+    -j=*|--use_dropout=*)
+      USEDROPOUT="${i#*=}"
+      shift
+      ;;
+    -k=*|--num_seeds=*)
+      NUMSEEDS="${i#*=}"
+      shift
+      ;;
+    -l=*|--use_amber=*)
       USEAMBER="${i#*=}"
       shift
       ;;
-    -i=*|--use_templates=*)
+    -m=*|--use_templates=*)
       USETEMPLATES="${i#*=}"
       shift
       ;;
-    -j=*|--custom_template=*)
+    -n=*|--custom_template=*)
       CUSTOMTEMPLATE="${i#*=}"
       shift
       ;;
-    -k=*|--custom_msa=*)
+    -o=*|--custom_msa=*)
       CUSTOMMSA="${i#*=}"
       shift
       ;;
-    -l=*|--pair_mode=*)
+    -p=*|--pair_mode=*)
       PAIRMODE="${i#*=}"
       shift
       ;;
-    -m=*|--multimer_version=*)
+    -q=*|--multimer_version=*)
       MULTIMERVERSION="${i#*=}"
       shift
       ;;
-    -n=*|--partition=*)
+    -r=*|--partition=*)
       PARTITION="${i#*=}"
       shift
       ;;
@@ -269,6 +313,9 @@ rm -f "${OUTPUT}/temp1.tmp" "${OUTPUT}/temp2.tmp"
 ISCOMPLEX=`fgrep -o ":" $STITCHEDFILE | wc -l`
 
 if [ $ISCOMPLEX = "0" ] ; then
+    ###############################
+    CLUSTERSCRIPT="/cephfs2/public/ColabFold2/lmb/utils/submit_colabfold_cluster.csh" #SINGLE CHAIN PREDICTION BROKEN AT THE MOMENT
+    ###############################
     if [ $MULTIMERVERSION != "auto" ]; then
         echo
         echo "Error: you cannot specify multimer_version when you only have one chain."
@@ -309,8 +356,10 @@ echo "Verify that the job is running with \"squeue -u yourusername\"."
 echo
 echo "Cancel this job with \"scancel JOBID\", where JOBID is the batch job number below."
 echo
+echo "sbatch command:" > ${OUTPUT}/submitcommand.txt
+echo "sbatch --gres=gpu:"${NUMGPUS} "--cpus-per-task="${NUMCPUS} "--mem="${MEMORY} "--partition="${PARTITION}" --error="${OUTPUT}"/Colabfold.out" "--output="${OUTPUT}"/Colabfold.out" $CLUSTERSCRIPT $STITCHEDFILE $JOBNAME $NUMMODELS $NUMGPUS $OUTPUT $NUMRECYCLES $USEAMBER $USETEMPLATES $CUSTOMTEMPLATE $CUSTOMMSA $PAIRMODE $MULTIMERVERSION $RECYCLESTOP $MAXMSA $USEDROPOUT $NUMSEEDS >> ${OUTPUT}/submitcommand.txt
 
-sbatch --gres=gpu:${NUMGPUS} --cpus-per-task=${NUMCPUS} --mem=${MEMORY} --partition=${PARTITION} --error="${OUTPUT}/Colabfold.out" --output="${OUTPUT}/Colabfold.out" $CLUSTERSCRIPT $STITCHEDFILE $JOBNAME $NUMMODELS $NUMGPUS $OUTPUT $NUMRECYCLES $USEAMBER $USETEMPLATES $CUSTOMTEMPLATE $CUSTOMMSA $PAIRMODE $MULTIMERVERSION $PARTITION
+sbatch --gres=gpu:${NUMGPUS} --cpus-per-task=${NUMCPUS} --mem=${MEMORY} --partition=${PARTITION} --error="${OUTPUT}/Colabfold.out" --output="${OUTPUT}/Colabfold.out" $CLUSTERSCRIPT $STITCHEDFILE $JOBNAME $NUMMODELS $NUMGPUS $OUTPUT $NUMRECYCLES $USEAMBER $USETEMPLATES $CUSTOMTEMPLATE $CUSTOMMSA $PAIRMODE $MULTIMERVERSION $RECYCLESTOP $MAXMSA $USEDROPOUT $NUMSEEDS
 
 echo
 
